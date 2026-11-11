@@ -143,4 +143,23 @@ ok('route.json：改道段都帶有預先驗證的路線，且起終點貼近錨
   assert.ok(len > 9 && len < 11.5, '淡江大橋段長度 ' + len);
 });
 
+ok('destination：往各方向走 500 m，距離與方位都對', () => {
+  const o = [24, 121];
+  for (const b of [0, 45, 90, 180, 270, 333]) {
+    const p = C.destination(o, b, 500);
+    assert.ok(Math.abs(C.hv(o, p) - 500) < 1, b + '° 距離 ' + C.hv(o, p));
+    assert.ok(Math.abs(C.angleDelta(C.bearing(o, p), b)) < 0.5, b + '° 方位 ' + C.bearing(o, p));
+  }
+});
+
+ok('angleDelta / lerpAngle：走最短轉向（跨過 0°/360°）', () => {
+  assert.strictEqual(C.angleDelta(350, 10), 20);
+  assert.strictEqual(C.angleDelta(10, 350), -20);
+  assert.strictEqual(C.angleDelta(0, 180) === 180 || C.angleDelta(0, 180) === -180, true);
+  assert.ok(Math.abs(C.lerpAngle(350, 10, 0.5) - 0) < 1e-9 || Math.abs(C.lerpAngle(350, 10, 0.5) - 360) < 1e-9);
+  assert.ok(Math.abs(C.lerpAngle(10, 350, 0.5) - 0) < 1e-9 || Math.abs(C.lerpAngle(10, 350, 0.5) - 360) < 1e-9);
+  assert.ok(Math.abs(C.lerpAngle(0, 90, 0.35) - 31.5) < 1e-9);
+  assert.ok(C.lerpAngle(0, 359, 1) > 358.9 && C.lerpAngle(0, 359, 1) <= 360);
+});
+
 console.log('\n全部通過：' + n + ' 項');

@@ -1,8 +1,8 @@
 /* 離線快取：程式與路線資料優先用網路（有網路就是最新），沒訊號時退回快取。 */
-const VER = 'shuangta-v4';
+const VER = 'shuangta-v5';
 const TILES = 'shuangta-tiles';
 const SHELL = [
-  './', 'index.html', 'app.js?v=4', 'core.js?v=4', 'route.json',
+  './', 'index.html', 'app.js?v=5', 'core.js?v=5', 'leaflet-rotate.js', 'route.json',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
 ];

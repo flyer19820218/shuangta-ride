@@ -18,7 +18,7 @@
   let track = null, cum = null, asc = null;   // 目前使用中的軌跡
   let pois = [];                // 目前軌跡上的補給點（已算好 km / on）
   let extraPois = LS.get('sh2.extra', []);    // Overpass 補充的點
-  const state = Object.assign({ danjiang: true, tainan: true, speed: 25 }, LS.get('sh2.state', {}));
+  const state = Object.assign({ danjiang: true, tainan: true, speed: 25, rot: true }, LS.get('sh2.state', {}));
   const detourInfo = {};        // id -> {status, msg, km, refKm, maxSnap, seg}
   let me = null;                // {lat, lon, acc, snap}
   let hint = null;
@@ -28,12 +28,62 @@
   const saveState = () => LS.set('sh2.state', state);
 
   // ---------- 地圖 ----------
-  const map = L.map('map', { zoomControl: false }).setView([23.8, 120.9], 7);
+  const CAN_ROT = typeof L.Map.prototype.setBearing === 'function';   // leaflet-rotate 沒載入就退回北上
+  const map = L.map('map', Object.assign({ zoomControl: false }, CAN_ROT ? { rotate: true, bearing: 0, touchRotate: false, rotateControl: false } : {})).setView([23.8, 120.9], 7);
   L.control.zoom({ position: 'bottomleft' }).addTo(map);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  window.__sh = { map };   // 給自動化測試用
   let routeLine = null, doneLine = null, meMarker = null, accCircle = null;
   const poiLayer = L.layerGroup().addTo(map);
   const candLayers = {};
+  // ---------- 朝前（heading-up）：地圖跟著前進方向轉，前方永遠在螢幕上方 ----------
+  let heading = null, lastRotAt = 0, prevPos = null;
+  const rotOn = () => CAN_ROT && state.rot !== false;
+  function setRotBtn() {
+    const b = $('btnRot'); if (!b) return;
+    b.textContent = '地圖：' + (!CAN_ROT ? '北上（不支援）' : rotOn() ? '朝前' : '北上');
+    b.classList.toggle('on', rotOn());
+  }
+  function drawCompass() {
+    const c = $('compass'); if (!c) return;
+    const br = CAN_ROT ? map.getBearing() : 0;
+    c.firstElementChild.style.transform = 'rotate(' + br + 'deg)';   // leaflet-rotate 的 bearing 是地圖順時針轉的角度，北方就跟著轉同角度
+    c.title = rotOn() ? '目前：朝前（點一下改北上）' : '目前：北上（點一下改朝前）';
+  }
+  /** deg = 要朝上的方向（行進方向，0=北）。地圖要逆時針轉 deg，也就是 leaflet-rotate 的 bearing = 360 - deg */
+  function setBearingSafe(deg) { if (CAN_ROT) { map.setBearing((((360 - deg) % 360) + 360) % 360); drawCompass(); } }
+  /** 依位置更新朝向。路線上用「前方約 150 m 的路線方向」（不受 GPS 抖動影響），偏離路線則用 GPS 行進方向。 */
+  function updateHeading(lat, lon, s, gpsHead, force) {
+    let target = null;
+    if (s.off <= 80) {
+      const j = C.rejoinTarget(cum, s.idx, 0.15);
+      if (j > s.idx) target = C.bearing([lat, lon], [track[j][0], track[j][1]]);
+      else if (s.idx > 0) target = C.bearing([track[s.idx - 1][0], track[s.idx - 1][1]], [track[s.idx][0], track[s.idx][1]]);
+    } else if (gpsHead != null && isFinite(gpsHead)) target = gpsHead;
+    else if (prevPos && C.hv(prevPos, [lat, lon]) > 15) target = C.bearing(prevPos, [lat, lon]);
+    if (prevPos == null || C.hv(prevPos, [lat, lon]) > 15) prevPos = [lat, lon];
+    if (target == null) return;
+    const now = Date.now();
+    if (heading == null) heading = target;
+    else {
+      if (!force && now - lastRotAt < 1000) return;
+      if (!force && Math.abs(C.angleDelta(heading, target)) < 5) return;
+      heading = C.lerpAngle(heading, target, force ? 1 : 0.4);
+    }
+    lastRotAt = now;
+    if (rotOn() && follow) setBearingSafe(heading);
+  }
+  /** 跟隨時的地圖中心：把我放在畫面下方 1/4 處，前方看得比較遠 */
+  function followCenter(ll, zoom) {
+    if (!rotOn() || heading == null) return ll;
+    const mpp = 156543.03 * Math.cos(ll[0] * Math.PI / 180) / Math.pow(2, zoom);
+    return C.destination(ll, heading, mpp * map.getSize().y * 0.2);
+  }
+  function followTo(ll, animate) {
+    const z = Math.max(map.getZoom(), rotOn() ? 16 : 14);
+    map.setView(followCenter(ll, z), z, { animate: !!animate });
+  }
+
   map.on('dragstart', () => { if (follow) { follow = false; $('btnFollow').textContent = '跟隨：關'; } });
 
   // ---------- 小工具 ----------
@@ -228,7 +278,7 @@
   }
 
   // ---------- 定位 ----------
-  function onPosition(lat, lon, acc) {
+  function onPosition(lat, lon, acc, gpsHead) {
     const s = C.snapToTrack(track, cum, [lat, lon], hint, 400);
     hint = s.idx;
     me = { lat, lon, acc, snap: s };
@@ -243,7 +293,8 @@
       doneLine.setLatLngs(track.slice(0, s.idx + 1).map(p => [p[0], p[1]]));
       lastDoneIdx = s.idx;
     }
-    if (follow) map.setView(ll, Math.max(map.getZoom(), 14), { animate: true });
+    updateHeading(lat, lon, s, gpsHead, false);
+    if (follow) followTo(ll, true);
     renderNav();
     renderSup();
     if ($('p-ele').classList.contains('on')) drawEle();
@@ -342,7 +393,7 @@
     if (gpsId != null) return;
     gpsMsg('定位中…（第一次請在跳出的視窗按「允許」）');
     gpsId = navigator.geolocation.watchPosition(
-      p => { gpsMsg('GPS 誤差約 ' + Math.round(p.coords.accuracy) + ' m'); onPosition(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
+      p => { gpsMsg('GPS 誤差約 ' + Math.round(p.coords.accuracy) + ' m'); onPosition(p.coords.latitude, p.coords.longitude, p.coords.accuracy, p.coords.speed > 1 ? p.coords.heading : null); },
       e => {
         gpsMsg(e.code === 1 ? '定位被拒絕：請到手機的瀏覽器／系統設定允許定位，網址要是 https。' : '定位失敗：' + e.message);
         if (e.code === 1) stopGps();
@@ -514,8 +565,16 @@
     $('btnGps').onclick = () => gpsId == null ? startGps() : stopGps();
     $('btnBack').onclick = planBack;
     $('btnWake').onclick = () => setWake(!wakeWanted);
-    $('btnFollow').onclick = () => { follow = !follow; $('btnFollow').textContent = '跟隨：' + (follow ? '開' : '關'); if (follow && me) map.setView([me.lat, me.lon], Math.max(map.getZoom(), 14)); };
-    $('fab').onclick = () => { follow = true; $('btnFollow').textContent = '跟隨：開'; if (me) map.setView([me.lat, me.lon], Math.max(map.getZoom(), 14)); else startGps(); };
+    $('btnFollow').onclick = () => { follow = !follow; $('btnFollow').textContent = '跟隨：' + (follow ? '開' : '關'); if (follow && me) { if (heading != null && rotOn()) setBearingSafe(heading); followTo([me.lat, me.lon], false); } };
+    $('fab').onclick = () => { follow = true; $('btnFollow').textContent = '跟隨：開'; if (me) { if (heading != null && rotOn()) setBearingSafe(heading); followTo([me.lat, me.lon], false); } else startGps(); };
+    $('btnRot').onclick = $('compass').onclick = () => {
+      state.rot = !rotOn(); saveState(); setRotBtn();
+      if (!rotOn()) setBearingSafe(0);
+      else if (heading != null) setBearingSafe(heading);
+      if (me && follow) followTo([me.lat, me.lon], false);
+      drawCompass();
+    };
+    setRotBtn(); drawCompass();
     $('kinds').addEventListener('change', () => { renderSup(); renderNav(); });
     $('btnAhead').onclick = fetchAhead;
     $('btnNear').onclick = fetchNear;

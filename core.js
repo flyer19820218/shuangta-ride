@@ -191,6 +191,20 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
+  /** 從 a 朝 bearingDeg 方向走 meters 公尺後的座標 [lat, lon] */
+  function destination(a, bearingDeg, meters) {
+    const br = rad(bearingDeg), lat1 = rad(a[0]), lon1 = rad(a[1]), d = meters / R;
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(br));
+    const lon2 = lon1 + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+    return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+  }
+
+  /** 角度差 b - a，範圍 -180..180（走最短的轉向） */
+  function angleDelta(a, b) { return ((b - a + 540) % 360 + 360) % 360 - 180; }
+
+  /** 讓角度 a 朝 b 前進 k（0~1）比例，走最短轉向；結果 0..360 */
+  function lerpAngle(a, b, k) { return ((a + angleDelta(a, b) * k) % 360 + 360) % 360; }
+
   /** 方位角 → 八方位中文 */
   function compass8(deg) {
     return ['北', '東北', '東', '東南', '南', '西南', '西', '西北'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];
@@ -227,5 +241,5 @@
 
   return { hv, buildCum, ascentStats, projectOnSegment, snapToTrack, applyDetour, attachPois,
            upcoming, brandOf, parseOverpass, mergePois, samplePolyline, fmtKm, fmtDur,
-           bearing, compass8, fmtDist, rejoinTarget, stepText };
+           bearing, compass8, fmtDist, rejoinTarget, stepText, destination, angleDelta, lerpAngle };
 });
