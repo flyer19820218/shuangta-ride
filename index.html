@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1976d2">
+<title>雙塔騎行助手</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#fff; --card:#f5f6f8; --fg:#1c1c1e; --mut:#6b7280; --line:#e5e7eb; --acc:#1976d2; --ok:#2e7d32; --warn:#ef6c00; --bad:#d32f2f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1c1c1e; --card:#2c2c2e; --fg:#f2f2f7; --mut:#9ca3af; --line:#3a3a3c; --acc:#64a8ff; --ok:#6fcf74; --warn:#ffb366; --bad:#ff7b7b; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.45 -apple-system, "Noto Sans TC", "PingFang TC", sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100dvh; }
+  #mapwrap { position: relative; flex: 1; min-height: 120px; }
+  #map { position: absolute; inset: 0; background: #e8eaed; }
+  #hud { position: absolute; left: 8px; right: 8px; top: 8px; z-index: 900; background: var(--bg); color: var(--fg);
+    border-radius: 10px; padding: 7px 10px; font-size: 14px; box-shadow: 0 1px 6px rgba(0,0,0,.3); pointer-events: none; }
+  #fab { position: absolute; right: 10px; bottom: 12px; z-index: 900; width: 46px; height: 46px; border-radius: 50%;
+    border: 0; background: var(--bg); color: var(--fg); font-size: 22px; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
+  #sheet { background: var(--bg); border-top: 1px solid var(--line); max-height: 48dvh; min-height: 0; display: flex; flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom); }
+  .tabs { display: flex; flex: none; }
+  .tabs button { flex: 1; padding: 10px 0; border: 0; background: none; color: var(--mut); font-size: 15px; border-bottom: 3px solid transparent; }
+  .tabs button.on { color: var(--acc); border-color: var(--acc); font-weight: 600; }
+  .pane { display: none; overflow: auto; padding: 10px 12px 14px; -webkit-overflow-scrolling: touch; }
+  .pane.on { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .stat { background: var(--card); border-radius: 8px; padding: 6px 4px; text-align: center; }
+  .stat b { display: block; font-size: 17px; }
+  .stat span { font-size: 11px; color: var(--mut); }
+  .card { background: var(--card); border-radius: 10px; padding: 9px 11px; margin-bottom: 8px; }
+  .card.warn { border-left: 4px solid var(--warn); }
+  .card.bad { border-left: 4px solid var(--bad); }
+  .card.good { border-left: 4px solid var(--ok); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+  button.b { padding: 9px 12px; font-size: 15px; border: 0; border-radius: 8px; background: var(--acc); color: #fff; }
+  button.b.alt { background: var(--card); color: var(--fg); border: 1px solid var(--line); }
+  button.b.on { background: var(--ok); }
+  button.b:disabled { opacity: .5; }
+  .poi { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .poi:last-child { border-bottom: 0; }
+  .poi .nm { flex: 1; min-width: 0; }
+  .poi .nm small { color: var(--mut); display: block; }
+  .poi .d { text-align: right; white-space: nowrap; font-weight: 600; }
+  .poi a { color: var(--acc); text-decoration: none; font-size: 13px; }
+  .badge { flex: none; width: 34px; height: 34px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .b711 { background: #e8420c; } .bfm { background: #0a7bd6; } .bhl { background: #1e8e3e; } .bok { background: #d4a017; }
+  .brest { background: #6d4cc2; } .bchk { background: #c2185b; } .bwater { background: #0097a7; } .bwc { background: #607d8b; } .bfood { background: #8d6e63; } .bother { background: #757575; }
+  .mk { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; color: #fff; font-size: 11px; font-weight: 700;
+    display: grid; place-items: center; box-shadow: 0 0 3px rgba(0,0,0,.6); }
+  .mk.faint { opacity: .45; transform: scale(.7); }
+  canvas { width: 100%; height: 170px; display: block; background: var(--card); border-radius: 10px; touch-action: none; }
+  label.t { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+  input[type=number], input[type=range] { font-size: 16px; }
+  input[type=number] { width: 80px; padding: 6px; }
+  input[type=range] { width: 100%; }
+  small.mut, .mut { color: var(--mut); }
+  h4 { margin: 4px 0 6px; font-size: 15px; }
+  .leaflet-container { font: inherit; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="hud">載入路線中…</div>
+    <button id="fab" title="回到我的位置" aria-label="回到我的位置">📍</button>
+  </div>
+
+  <div id="sheet">
+    <div class="tabs" id="tabs">
+      <button data-p="nav" class="on">導航</button>
+      <button data-p="sup">補給</button>
+      <button data-p="ele">海拔</button>
+      <button data-p="rt">路線</button>
+    </div>
+
+    <!-- 導航 -->
+    <div class="pane on" id="p-nav">
+      <div class="grid">
+        <div class="stat"><b id="sDone">–</b><span>已騎 km</span></div>
+        <div class="stat"><b id="sLeft">–</b><span>剩餘 km</span></div>
+        <div class="stat"><b id="sOff">–</b><span>離路線 m</span></div>
+        <div class="stat"><b id="sEle">–</b><span>海拔 m</span></div>
+      </div>
+      <div id="nextCard" class="card">按下「開始定位」後，這裡會顯示下一個補給點。</div>
+      <div class="card" id="etaCard">–</div>
+      <div class="row">
+        <button class="b" id="btnGps">開始定位</button>
+        <button class="b alt" id="btnWake">保持亮屏：關</button>
+        <button class="b alt" id="btnFollow">跟隨：開</button>
+      </div>
+      <small class="mut" id="gpsMsg"></small>
+    </div>
+
+    <!-- 補給 -->
+    <div class="pane" id="p-sup">
+      <div class="row" id="kinds">
+        <label class="t"><input type="checkbox" data-k="store" checked> 便利商店</label>
+        <label class="t"><input type="checkbox" data-k="rest" checked> 休息站</label>
+        <label class="t"><input type="checkbox" data-k="water"> 飲水</label>
+        <label class="t"><input type="checkbox" data-k="wc"> 廁所</label>
+      </div>
+      <div class="row">
+        <button class="b" id="btnAhead">更新前方 40 km（連網）</button>
+        <button class="b alt" id="btnNear">我附近的便利店</button>
+      </div>
+      <div id="supMsg" class="mut" style="margin-bottom:6px"></div>
+      <div id="supList"></div>
+    </div>
+
+    <!-- 海拔 -->
+    <div class="pane" id="p-ele">
+      <div class="row">
+        <button class="b" id="eleAll">全程</button>
+        <button class="b alt" id="eleAhead">前方 30 km</button>
+      </div>
+      <canvas id="cv"></canvas>
+      <div id="eleInfo" class="mut" style="margin-top:6px"></div>
+    </div>
+
+    <!-- 路線 -->
+    <div class="pane" id="p-rt">
+      <h4>改道段（可切換）</h4>
+      <div id="detours"></div>
+      <h4>預估均速</h4>
+      <div class="row"><input type="number" id="speed" min="10" max="45" step="0.5" value="25"> <span class="mut">km/h（用來估到達時間）</span></div>
+      <h4>在家測試（不用真的定位）</h4>
+      <label class="t"><input type="checkbox" id="simOn"> 使用模擬位置</label>
+      <input type="range" id="simKm" min="0" max="505" step="0.5" value="0">
+      <div class="mut" id="simLbl"></div>
+      <h4>資料</h4>
+      <div class="mut" id="srcInfo"></div>
+      <div class="row"><button class="b alt" id="btnClear">清除快取</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
