@@ -38,9 +38,13 @@
   .card.good { border-left: 4px solid var(--ok); }
   .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
   button.b { padding: 9px 12px; font-size: 15px; border: 0; border-radius: 8px; background: var(--acc); color: #fff; }
-  button.b.alt { background: var(--card); color: var(--fg); border: 1px solid var(--line); }
-  button.b.on { background: var(--ok); }
+  .b.alt { background: var(--card); color: var(--fg); border: 1px solid var(--line); }
+  .b.on { background: var(--ok); }
   button.b:disabled { opacity: .5; }
+  a.b { display: inline-block; text-decoration: none; padding: 9px 12px; font-size: 15px; border-radius: 8px; }
+  [hidden] { display: none !important; }
+  #backSteps ol { margin: 6px 0 0; padding-left: 20px; color: var(--fg); }
+  #backTxt .arrow { display: inline-block; font-size: 26px; line-height: 1; vertical-align: middle; color: var(--warn); }
   .poi { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
   .poi:last-child { border-bottom: 0; }
   .poi .nm { flex: 1; min-width: 0; }
@@ -88,6 +92,14 @@
         <div class="stat"><b id="sEle">–</b><span>海拔 m</span></div>
       </div>
       <div id="nextCard" class="card">按下「開始定位」後，這裡會顯示下一個補給點。</div>
+      <div id="backCard" class="card bad" hidden>
+        <div id="backTxt"></div>
+        <div class="row">
+          <button class="b" id="btnBack">規劃回去的路（連網）</button>
+          <a class="b alt" id="backG" href="#" target="_blank" rel="noopener">Google 地圖備用</a>
+        </div>
+        <div id="backSteps" class="mut"></div>
+      </div>
       <div class="card" id="etaCard">–</div>
       <div class="row">
         <button class="b" id="btnGps">開始定位</button>

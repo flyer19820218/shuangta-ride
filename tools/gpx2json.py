@@ -11,6 +11,7 @@
 """
 import json
 import math
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -131,8 +132,8 @@ def main(src, dst):
         {
             "id": "danjiang",
             "name": "淡江大橋（淡水→八里直接過橋）",
-            "note": "取代原路線繞關渡大橋的一段。網頁會用單車路由重算並和原路線比距離；"
-                    "若路由資料還沒收錄新橋（距離沒變短），就維持原路線。",
+            "note": "取代原路線繞關渡大橋的一段（淡江大橋 2026-05-12 通車）。"
+                    "已用單車路由驗證：淡水到八里 10.1 km，比繞關渡的 19.0 km 短約 9 km。",
             "mode": "auto",
             "a": anchor(15.0),
             "b": anchor(34.0),
@@ -141,9 +142,9 @@ def main(src, dst):
         },
         {
             "id": "tainan",
-            "name": "台南外圍繞行（候選，未驗證）",
-            "note": "七股→西港→新市→歸仁→湖內，避開安南/安平市區邊緣。"
-                    "經過的城鎮座標為概略位置，請先在地圖上確認路線再決定要不要啟用。",
+            "name": "台南外圍繞行（避開市區）",
+            "note": "七股→西港→新市→歸仁→湖內。已用單車路由驗證：47.0 km（原路線 32.2 km，多約 15 km），"
+                    "離台南市中心最近約 7.4 km（原路線最近 2.7 km）。",
             "mode": "via",
             "a": anchor(326.9),
             "b": anchor(359.1),
@@ -152,9 +153,20 @@ def main(src, dst):
                 [23.0786, 120.2959, "新市"],
                 [22.9672, 120.2928, "歸仁"],
             ],
-            "default": False,
+            "default": True,
         },
     ]
+
+    # 嵌入預先驗證的路線（tools/detour_segs.json），沒網路也能直接使用
+    segs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "detour_segs.json")
+    if os.path.exists(segs_path):
+        with open(segs_path, encoding="utf-8") as f:
+            segs = json.load(f)
+        for d in detours:
+            s = segs.get(d["id"])
+            if s:
+                d["seg"] = [[round(p[0], 5), round(p[1], 5)] for p in s["seg"]]
+                d["verified"] = s["verified"]
 
     out = {
         "meta": {

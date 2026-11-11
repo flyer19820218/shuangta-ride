@@ -18,7 +18,7 @@
   let track = null, cum = null, asc = null;   // 目前使用中的軌跡
   let pois = [];                // 目前軌跡上的補給點（已算好 km / on）
   let extraPois = LS.get('sh2.extra', []);    // Overpass 補充的點
-  const state = Object.assign({ danjiang: true, tainan: false, speed: 25 }, LS.get('sh2.state', {}));
+  const state = Object.assign({ danjiang: true, tainan: true, speed: 25 }, LS.get('sh2.state', {}));
   const detourInfo = {};        // id -> {status, msg, km, refKm, maxSnap, seg}
   let me = null;                // {lat, lon, acc, snap}
   let hint = null;
@@ -81,10 +81,10 @@
     $('srcInfo').innerHTML = esc(R.meta.name) + '<br>來源：' + esc(R.meta.source) + '<br>全程 ' + R.meta.km + ' km、爬升約 ' + R.meta.ascent + ' m（依海拔資料估算）。<br>' +
       '補給點資料為參考 GPX 內的 ' + R.pois.length + ' 個點；店家營業狀況請以現場為準。';
     loadCachedDetours();
+    for (const d of R.detours) if (d.seg && d.seg.length > 1) detourInfo[d.id] = presetInfo(d);   // 預先驗證的路線先就位
     bindUi();
     rebuild(true);
-    if (state.danjiang) ensureDetour('danjiang');
-    if (state.tainan) ensureDetour('tainan');
+    for (const d of R.detours) if (state[d.id] && !(d.seg && d.seg.length > 1)) ensureDetour(d.id);   // 沒有預設路線的才連網算
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
     const q = new URLSearchParams(location.search);
     if (q.has('sim')) { $('simOn').checked = true; $('simKm').value = q.get('sim'); applySim(); }
@@ -101,8 +101,15 @@
     }
   }
 
+  /** route.json 內附的「預先驗證路線」：不用連網，直接當作已算好的結果 */
+  function presetInfo(d) {
+    const len = d.seg.reduce((s, p, i) => i ? s + C.hv(d.seg[i - 1], p) : 0, 0) / 1000;
+    return { status: 'ok', seg: d.seg, km: len, refKm: d.b.km - d.a.km, maxSnap: 0, preset: true, verified: d.verified || '' };
+  }
+
   async function ensureDetour(id) {
     const d = R.detours.find(x => x.id === id);
+    if (d.seg && d.seg.length > 1) { detourInfo[id] = presetInfo(d); renderDetours(); rebuild(false); return; }
     const cur = detourInfo[id];
     if (cur && (cur.status === 'ok' || cur.status === 'rejected' || cur.status === 'loading')) { renderDetours(); rebuild(false); return; }
     detourInfo[id] = { status: 'loading' };
@@ -142,7 +149,7 @@
       if (i.status === 'loading') st = '計算中…';
       else if (i.status === 'ok') {
         const diff = i.km - i.refKm;
-        st = '✅ 新路線 <b>' + i.km.toFixed(1) + ' km</b>（原路線 ' + i.refKm.toFixed(1) + ' km，' + (diff <= 0 ? '省 ' + (-diff).toFixed(1) : '多 ' + diff.toFixed(1)) + ' km）';
+        st = (i.preset ? '✅ 已驗證（' + esc(i.verified) + '）：' : '✅ ') + '新路線 <b>' + i.km.toFixed(1) + ' km</b>（原路線 ' + i.refKm.toFixed(1) + ' km，' + (diff <= 0 ? '省 ' + (-diff).toFixed(1) : '多 ' + diff.toFixed(1)) + ' km）';
         if (i.maxSnap > 300) st += '<br>⚠ 有路線點離道路 ' + Math.round(i.maxSnap) + ' m，請在地圖上檢查';
         cls = 'good';
       } else if (i.status === 'rejected') { st = '⚠ ' + esc(i.msg); cls = 'warn'; }
@@ -271,6 +278,60 @@
     $('etaCard').innerHTML = '剩餘爬升約 <b>' + Math.round(upLeft) + ' m</b> ・ 以 ' + sp + ' km/h 估，還要 <b>' + C.fmtDur(mins) + '</b>，預計 <b>' + clock(Date.now() + mins * 6e4) + '</b> 抵達鵝鑾鼻。';
     hud('已騎 <b>' + C.fmtKm(done) + '</b> ・ 剩 <b>' + C.fmtKm(left) + '</b> km' + (up[0] ? ' ・ 下一站 ' + esc(up[0].b || up[0].n) + ' ' + C.fmtKm(up[0].dist) + ' km' : '') +
       (s.off > 200 ? ' ・ <span style="color:var(--bad)">偏離 ' + Math.round(s.off) + ' m</span>' : ''));
+    renderBack();
+  }
+
+  // ---------- 回到路線（迷路用，不用 Google） ----------
+  let guideLine = null, backLine = null, backInfo = null;
+
+  function clearBack() {
+    if (guideLine) { guideLine.remove(); guideLine = null; }
+    if (backLine) { backLine.remove(); backLine = null; }
+    backInfo = null; $('backSteps').innerHTML = '';
+  }
+
+  function backTarget() {   // 路線上、你前進方向前方約 150 m 的點
+    return track[C.rejoinTarget(cum, me.snap.idx, 0.15)];
+  }
+
+  function renderBack() {
+    const card = $('backCard');
+    if (!me || me.snap.off <= 80) { card.hidden = true; if (guideLine || backLine) clearBack(); return; }
+    const t = backTarget(), from = [me.lat, me.lon];
+    const brg = C.bearing(from, [t[0], t[1]]), d = C.hv(from, [t[0], t[1]]);
+    card.hidden = false;
+    $('backTxt').innerHTML = '<span class="arrow" style="transform:rotate(' + Math.round(brg) + 'deg)">↑</span> 你離開路線了。往 <b>' +
+      C.compass8(brg) + '</b> 約 <b>' + C.fmtDist(d) + '</b> 可回到路線（地圖上的橘色虛線）。';
+    $('backG').href = gmaps(t[0], t[1]);
+    if (!guideLine) guideLine = L.polyline([], { color: '#ef6c00', weight: 4, dashArray: '6 8' }).addTo(map);
+    guideLine.setLatLngs([from, [t[0], t[1]]]);
+    if (backInfo && C.hv(from, backInfo.from) > 150) {
+      $('backSteps').innerHTML = '<span class="mut">你已經移動了一段，上面的轉彎提示過時，請重新規劃。</span>';
+      backInfo = null;
+    }
+  }
+
+  async function planBack() {
+    if (!me || me.snap.off <= 80) return;
+    const t = backTarget(), from = [me.lat, me.lon];
+    $('btnBack').disabled = true; $('backSteps').textContent = '規劃中…';
+    try {
+      const u = 'https://routing.openstreetmap.de/routed-bike/route/v1/driving/' + me.lon + ',' + me.lat + ';' + t[1] + ',' + t[0] +
+        '?overview=full&geometries=geojson&steps=true';
+      const j = await (await fetchTimeout(u, 20000)).json();
+      if (j.code !== 'Ok' || !j.routes || !j.routes[0]) throw new Error(j.code || '沒有結果');
+      const rt = j.routes[0];
+      if (backLine) backLine.remove();
+      backLine = L.polyline(rt.geometry.coordinates.map(c => [c[1], c[0]]), { color: '#ef6c00', weight: 5, opacity: 0.95 }).addTo(map);
+      const steps = [].concat.apply([], rt.legs.map(l => l.steps));
+      backInfo = { from };
+      $('backSteps').innerHTML = '<b>實際騎法：' + C.fmtDist(rt.distance) + '，約 ' + C.fmtDur(rt.duration / 60) + '</b><ol>' +
+        steps.slice(0, 12).map(s => '<li>' + esc(C.stepText(s)) + '</li>').join('') + '</ol>' +
+        (steps.length > 12 ? '<div class="mut">…還有 ' + (steps.length - 12) + ' 步，騎近時再按一次重新規劃。</div>' : '');
+    } catch (e) {
+      $('backSteps').textContent = '規劃失敗：' + (e.name === 'AbortError' ? '逾時' : e.message) + '。沒訊號時，先照橘色虛線的方向騎，接回紅線即可。';
+    }
+    $('btnBack').disabled = false;
   }
 
   function gpsMsg(t) { $('gpsMsg').textContent = t || ''; }
@@ -449,6 +510,7 @@
       if (b.dataset.p === 'sup') renderSup();
     });
     $('btnGps').onclick = () => gpsId == null ? startGps() : stopGps();
+    $('btnBack').onclick = planBack;
     $('btnWake').onclick = () => setWake(!wakeWanted);
     $('btnFollow').onclick = () => { follow = !follow; $('btnFollow').textContent = '跟隨：' + (follow ? '開' : '關'); if (follow && me) map.setView([me.lat, me.lon], Math.max(map.getZoom(), 14)); };
     $('fab').onclick = () => { follow = true; $('btnFollow').textContent = '跟隨：開'; if (me) map.setView([me.lat, me.lon], Math.max(map.getZoom(), 14)); else startGps(); };

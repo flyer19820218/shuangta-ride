@@ -98,4 +98,49 @@ ok('fmtKm / fmtDur', () => {
   assert.strictEqual(C.fmtDur(5), '5 分');
 });
 
+ok('bearing / compass8：四個基本方位與八方位名稱', () => {
+  const o = [24, 121];
+  assert.ok(Math.abs(C.bearing(o, [25, 121]) - 0) < 0.5, '正北');
+  assert.ok(Math.abs(C.bearing(o, [24, 122]) - 90) < 1, '正東');
+  assert.ok(Math.abs(C.bearing(o, [23, 121]) - 180) < 0.5, '正南');
+  assert.ok(Math.abs(C.bearing(o, [24, 120]) - 270) < 1, '正西');
+  assert.strictEqual(C.compass8(0), '北');
+  assert.strictEqual(C.compass8(44), '東北');
+  assert.strictEqual(C.compass8(92), '東');
+  assert.strictEqual(C.compass8(200), '南');
+  assert.strictEqual(C.compass8(359), '北');
+  assert.strictEqual(C.compass8(-45), '西北');
+});
+
+ok('fmtDist', () => {
+  assert.strictEqual(C.fmtDist(350.4), '350 m');
+  assert.strictEqual(C.fmtDist(1234), '1.2 km');
+});
+
+ok('rejoinTarget：回路目標在行進方向前方約 150 m，且不會超出終點', () => {
+  const i = C.rejoinTarget(cum, 2000, 0.15);
+  assert.ok(i >= 2000 && cum[i] - cum[2000] >= 0.15 - 1e-9, '至少前進 0.15 km');
+  assert.ok(cum[i] - cum[2000] < 0.15 + 1.8, '不會跳太遠（軌跡最大間距約 1.7 km）');
+  assert.strictEqual(C.rejoinTarget(cum, cum.length - 1, 0.15), cum.length - 1);
+  assert.strictEqual(C.rejoinTarget(cum, 500, 0), 500);
+});
+
+ok('stepText：轉彎文字', () => {
+  assert.strictEqual(C.stepText({ maneuver: { type: 'turn', modifier: 'right' }, name: '台2線', distance: 350 }), '右轉，進入 台2線，350 m');
+  assert.strictEqual(C.stepText({ maneuver: { type: 'depart', modifier: 'straight' }, name: '', distance: 1200 }), '出發，直行，1.2 km');
+  assert.strictEqual(C.stepText({ maneuver: { type: 'arrive' }, name: '', distance: 0 }), '抵達路線');
+  assert.strictEqual(C.stepText({ maneuver: { type: 'turn', modifier: 'slight left' }, name: '', distance: 80 }), '稍微左轉，80 m');
+});
+
+ok('route.json：改道段都帶有預先驗證的路線，且起終點貼近錨點', () => {
+  for (const d of R.detours) {
+    assert.ok(Array.isArray(d.seg) && d.seg.length > 50, d.id + ' 缺 seg');
+    assert.ok(C.hv(d.seg[0], [d.a.lat, d.a.lon]) < 30, d.id + ' 起點偏離錨點');
+    assert.ok(C.hv(d.seg[d.seg.length - 1], [d.b.lat, d.b.lon]) < 30, d.id + ' 終點偏離錨點');
+  }
+  const dj = R.detours.find(d => d.id === 'danjiang');
+  const len = dj.seg.reduce((s, p, i) => i ? s + C.hv(dj.seg[i - 1], p) : 0, 0) / 1000;
+  assert.ok(len > 9 && len < 11.5, '淡江大橋段長度 ' + len);
+});
+
 console.log('\n全部通過：' + n + ' 項');

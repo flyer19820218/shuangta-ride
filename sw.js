@@ -1,5 +1,5 @@
 /* 離線快取：程式與路線資料優先用網路（有網路就是最新），沒訊號時退回快取。 */
-const VER = 'shuangta-v2';
+const VER = 'shuangta-v3';
 const TILES = 'shuangta-tiles';
 const SHELL = [
   './', 'index.html', 'app.js', 'core.js', 'route.json',

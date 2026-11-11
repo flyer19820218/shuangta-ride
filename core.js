@@ -183,6 +183,49 @@
     return h ? h + ' 小時 ' + m + ' 分' : m + ' 分';
   }
 
+  /** 從 a 看向 b 的方位角（0=北，90=東），a、b = [lat, lon] */
+  function bearing(a, b) {
+    const dn = rad(b[1] - a[1]);
+    const y = Math.sin(dn) * Math.cos(rad(b[0]));
+    const x = Math.cos(rad(a[0])) * Math.sin(rad(b[0])) - Math.sin(rad(a[0])) * Math.cos(rad(b[0])) * Math.cos(dn);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
+  /** 方位角 → 八方位中文 */
+  function compass8(deg) {
+    return ['北', '東北', '東', '東南', '南', '西南', '西', '西北'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+  }
+
+  /** 距離（公尺）→「350 m」或「1.2 km」 */
+  function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m'; }
+
+  /**
+   * 迷路時的回路目標：以吸附到的位置 idx 為基準，往前（行進方向）約 aheadKm 的路線點，
+   * 讓你接回路線後直接朝正確方向前進。回傳軌跡索引。
+   */
+  function rejoinTarget(cum, idx, aheadKm) {
+    const want = cum[idx] + (aheadKm || 0);
+    let i = idx;
+    while (i < cum.length - 1 && cum[i] < want) i++;
+    return i;
+  }
+
+  /** OSRM 的一個轉彎步驟 → 中文提示，例如「右轉，進入 台2線，350 m」 */
+  function stepText(step) {
+    const m = step.maneuver || {}, mod = m.modifier || '';
+    const turn = { left: '左轉', right: '右轉', 'slight left': '稍微左轉', 'slight right': '稍微右轉',
+                   'sharp left': '急左轉', 'sharp right': '急右轉', straight: '直行', uturn: '迴轉' }[mod] || '前進';
+    let verb;
+    if (m.type === 'depart') verb = '出發' + (mod && turn !== '前進' ? '，' + turn : '');
+    else if (m.type === 'arrive') return '抵達路線';
+    else if (m.type === 'roundabout' || m.type === 'rotary') verb = '進入圓環';
+    else if (m.type === 'continue' || m.type === 'new name') verb = '沿路直行';
+    else verb = turn;
+    const name = step.name ? '，進入 ' + step.name : '';
+    return verb + name + '，' + fmtDist(step.distance || 0);
+  }
+
   return { hv, buildCum, ascentStats, projectOnSegment, snapToTrack, applyDetour, attachPois,
-           upcoming, brandOf, parseOverpass, mergePois, samplePolyline, fmtKm, fmtDur };
+           upcoming, brandOf, parseOverpass, mergePois, samplePolyline, fmtKm, fmtDur,
+           bearing, compass8, fmtDist, rejoinTarget, stepText };
 });
