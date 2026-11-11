@@ -1,8 +1,8 @@
 /* 離線快取：程式與路線資料優先用網路（有網路就是最新），沒訊號時退回快取。 */
-const VER = 'shuangta-v3';
+const VER = 'shuangta-v4';
 const TILES = 'shuangta-tiles';
 const SHELL = [
-  './', 'index.html', 'app.js', 'core.js', 'route.json',
+  './', 'index.html', 'app.js?v=4', 'core.js?v=4', 'route.json',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
 ];
@@ -53,7 +53,7 @@ self.addEventListener('fetch', e => {
 
   // 本站檔案：網路優先，失敗退回快取
   if (url.origin === location.origin) {
-    e.respondWith(fetch(req).then(res => {
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(VER).then(c => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req).then(hit => hit || caches.match('index.html'))));

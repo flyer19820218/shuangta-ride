@@ -70,7 +70,7 @@
   // ---------- 載入 ----------
   async function boot() {
     try {
-      const res = await fetch('route.json');
+      const res = await fetch('route.json', { cache: 'no-cache' });
       R = await res.json();
     } catch (e) {
       hud('❌ 載入 route.json 失敗：' + esc(e.message));
@@ -376,7 +376,9 @@
     stopGps();
     let i = 0;
     while (i < cum.length - 1 && cum[i] < km) i++;
-    onPosition(track[i][0], track[i][1], 5);
+    const off = +$('simOff').value;
+    $('simOffLbl').textContent = off;
+    onPosition(track[i][0] + off / 111195, track[i][1], 5);
   }
 
   // ---------- 補給 ----------
@@ -523,6 +525,7 @@
     $('speed').onchange = () => { const v = +$('speed').value; if (v >= 10 && v <= 45) { state.speed = v; saveState(); renderNav(); } };
     $('simOn').onchange = () => { applySim(); if (!$('simOn').checked) $('simLbl').textContent = ''; };
     $('simKm').oninput = applySim;
+    $('simOff').oninput = applySim;
     $('btnClear').onclick = async () => {
       LS.keys().forEach(LS.del);
       try { (await caches.keys()).forEach(k => caches.delete(k)); } catch (e) { }

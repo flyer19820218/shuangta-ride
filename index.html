@@ -145,6 +145,8 @@
       <label class="t"><input type="checkbox" id="simOn"> 使用模擬位置</label>
       <input type="range" id="simKm" min="0" max="505" step="0.5" value="0">
       <div class="mut" id="simLbl"></div>
+      <div class="mut" style="margin-top:6px">模擬離開路線（往北偏移，單位公尺）：<b id="simOffLbl">0</b></div>
+      <input type="range" id="simOff" min="0" max="2000" step="50" value="0">
       <h4>資料</h4>
       <div class="mut" id="srcInfo"></div>
       <div class="row"><button class="b alt" id="btnClear">清除快取</button></div>
@@ -153,7 +155,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="core.js"></script>
-<script src="app.js"></script>
+<script src="core.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
