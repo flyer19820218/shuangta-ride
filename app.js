@@ -18,7 +18,8 @@
   let track = null, cum = null, asc = null;   // 目前使用中的軌跡
   let pois = [];                // 目前軌跡上的補給點（已算好 km / on）
   let extraPois = LS.get('sh2.extra', []);    // Overpass 補充的點
-  const state = Object.assign({ danjiang: true, tainan: true, speed: 25, rot: true }, LS.get('sh2.state', {}));
+  const state = Object.assign({ danjiang: true, tainan: false, speed: 25, rot: true }, LS.get('sh2.state', {}));
+  if (state.ver !== 3) { state.tainan = false; state.ver = 3; LS.set('sh2.state', state); }   // 2026-11-12 起台南預設走原路線（舊設定一次性重設）
   const detourInfo = {};        // id -> {status, msg, km, refKm, maxSnap, seg}
   let me = null;                // {lat, lon, acc, snap}
   let hint = null;
