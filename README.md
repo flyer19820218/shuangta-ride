@@ -34,6 +34,7 @@
 node tests/core.test.js                                    # 跑測試
 python3 tools/gpx2json.py 來源.gpx route.json              # 換路線時重新產生資料
 python3 -m http.server 8000                                # 本機預覽 http://localhost:8000
+node tools/route2gpx.js 雙塔.gpx                           # 輸出車錶用 GPX（預設只開淡江大橋；加 danjiang tainan 可指定改道段）
 ```
 
 ## 修改規則（請 AI 協助修改時務必遵守）
