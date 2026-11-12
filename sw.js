@@ -1,8 +1,8 @@
 /* 離線快取：程式與路線資料優先用網路（有網路就是最新），沒訊號時退回快取。 */
-const VER = 'shuangta-v6';
+const VER = 'shuangta-v7';
 const TILES = 'shuangta-tiles';
 const SHELL = [
-  './', 'index.html', 'app.js?v=6', 'core.js?v=6', 'leaflet-rotate.js', 'route.json',
+  './', 'index.html', 'app.js?v=7', 'core.js?v=7', 'leaflet-rotate.js', 'route.json',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
 ];
@@ -27,7 +27,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
 
   // 路由、Overpass 等 API：一律走網路，不快取
-  if (/routing\.openstreetmap\.de|overpass-api\.de/.test(url.host)) return;
+  if (/routing\.openstreetmap\.de|overpass-api\.de|api\.open-meteo\.com/.test(url.host)) return;
 
   // 地圖圖磚：快取優先，看過的區域沒訊號也能顯示
   if (/tile\.openstreetmap\.org$/.test(url.host)) {

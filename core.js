@@ -205,6 +205,20 @@
   /** 讓角度 a 朝 b 前進 k（0~1）比例，走最短轉向；結果 0..360 */
   function lerpAngle(a, b, k) { return ((a + angleDelta(a, b) * k) % 360 + 360) % 360; }
 
+  /**
+   * 風對騎士的影響。from = 風「從哪個方向吹來」（氣象慣例，0=北風），heading = 行進方向，speed = 風速。
+   * 回傳 {to: 風吹向的方位, tail: 順風分量（正=順風、負=逆風，同風速單位）, cross: 側風分量（正=從右側吹來），kind}
+   */
+  function windEffect(from, heading, speed) {
+    const to = (from + 180) % 360;
+    if (heading == null) return { to, tail: null, cross: null, kind: '' };
+    const d = rad(angleDelta(heading, to));          // 風吹向相對於行進方向（0=正順風）
+    const tail = Math.cos(d) * speed, cross = -Math.sin(d) * speed;
+    const a = Math.abs(angleDelta(heading, to));
+    const kind = a <= 45 ? '順風' : a >= 135 ? '逆風' : (angleDelta(heading, to) > 0 ? '左側風' : '右側風');
+    return { to, tail, cross, kind };
+  }
+
   /** 方位角 → 八方位中文 */
   function compass8(deg) {
     return ['北', '東北', '東', '東南', '南', '西南', '西', '西北'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];
@@ -241,5 +255,5 @@
 
   return { hv, buildCum, ascentStats, projectOnSegment, snapToTrack, applyDetour, attachPois,
            upcoming, brandOf, parseOverpass, mergePois, samplePolyline, fmtKm, fmtDur,
-           bearing, compass8, fmtDist, rejoinTarget, stepText, destination, angleDelta, lerpAngle };
+           bearing, compass8, fmtDist, rejoinTarget, stepText, destination, angleDelta, lerpAngle, windEffect };
 });

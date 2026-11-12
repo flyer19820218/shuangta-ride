@@ -162,4 +162,17 @@ ok('angleDelta / lerpAngle：走最短轉向（跨過 0°/360°）', () => {
   assert.ok(C.lerpAngle(0, 359, 1) > 358.9 && C.lerpAngle(0, 359, 1) <= 360);
 });
 
+ok('windEffect：順風／逆風／側風', () => {
+  // 往北騎(0°)，南風(180°，從南吹向北)＝順風
+  let w = C.windEffect(180, 0, 4); assert.strictEqual(w.kind, '順風'); assert.ok(Math.abs(w.tail - 4) < 1e-9);
+  w = C.windEffect(0, 0, 4); assert.strictEqual(w.kind, '逆風'); assert.ok(Math.abs(w.tail + 4) < 1e-9);
+  // 往北騎，西風(從西吹向東)＝風從左邊來；東風＝從右邊來
+  w = C.windEffect(270, 0, 4); assert.strictEqual(w.kind, '左側風'); assert.ok(Math.abs(w.tail) < 1e-9 && w.cross < 0);
+  w = C.windEffect(90, 0, 4); assert.strictEqual(w.kind, '右側風'); assert.ok(w.cross > 0);
+  // 往南騎(180°)，東北風(45°)：風吹向 225°，與行進相差 45° → 順風邊界
+  assert.strictEqual(C.windEffect(45, 180, 3).kind, '順風');
+  assert.strictEqual(C.windEffect(45, 180, 3).to, 225);
+  assert.strictEqual(C.windEffect(100, null, 3).kind, '');
+});
+
 console.log('\n全部通過：' + n + ' 項');

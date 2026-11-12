@@ -45,10 +45,45 @@
     b.textContent = '地圖：' + (!CAN_ROT ? '北上（不支援）' : rotOn() ? '朝前' : '北上');
     b.classList.toggle('on', rotOn());
   }
+  // ---------- 風向（Open-Meteo 預報模型的「目前」風，不是現場實測）----------
+  let wind = LS.get('sh2.wind', null);   // {dir(風從哪來), spd(m/s), gust, t, lat, lon}
+  let windBusy = false;
+  function drawWind() {
+    const el = $('wind'); if (!el) return;
+    if (!wind) { el.hidden = true; return; }
+    el.hidden = false;
+    const br = CAN_ROT ? map.getBearing() : 0;
+    const w = C.windEffect(wind.dir, heading, wind.spd);
+    // 箭頭＝風吹去的方向（畫面上）；地圖順時針轉了 br，所以箭頭也要加 br
+    $('windArrow').style.transform = 'rotate(' + (((w.to + br) % 360 + 360) % 360) + 'deg)';
+    const ageMin = Math.round((Date.now() - wind.t) / 60000);
+    $('windTxt').innerHTML = (w.kind ? '<b class="' + (w.kind === '逆風' ? 'bad' : w.kind === '順風' ? 'good' : '') + '">' + w.kind + '</b> ' : '') +
+      wind.spd.toFixed(1) + ' m/s' + '<small>' + C.compass8(wind.dir) + '風' + (wind.gust ? ' · 陣風 ' + wind.gust.toFixed(0) : '') + (ageMin > 30 ? ' · ' + ageMin + ' 分前' : '') + '</small>';
+  }
+  /** 位置有變動且資料超過 15 分鐘（或移動超過 8 km）才重新抓；失敗就沿用舊的 */
+  async function fetchWind(lat, lon) {
+    if (windBusy || !navigator.onLine) return;
+    if (wind && Date.now() - wind.t < 15 * 60000 && C.hv([wind.lat, wind.lon], [lat, lon]) < 8000) return;
+    windBusy = true;
+    try {
+      const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(3) + '&longitude=' + lon.toFixed(3) +
+        '&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&timezone=auto';
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(u, { signal: ctl.signal }); clearTimeout(to);
+      const j = await r.json(), c = j && j.current;
+      if (c && isFinite(c.wind_speed_10m) && isFinite(c.wind_direction_10m)) {
+        wind = { dir: c.wind_direction_10m, spd: c.wind_speed_10m, gust: c.wind_gusts_10m, t: Date.now(), lat, lon };
+        LS.set('sh2.wind', wind);
+      }
+    } catch (e) { /* 沒訊號：沿用上次的 */ }
+    windBusy = false; drawWind();
+  }
+
   function drawCompass() {
     const c = $('compass'); if (!c) return;
     const br = CAN_ROT ? map.getBearing() : 0;
     c.firstElementChild.style.transform = 'rotate(' + br + 'deg)';   // leaflet-rotate 的 bearing 是地圖順時針轉的角度，北方就跟著轉同角度
+    drawWind();
     c.title = rotOn() ? '目前：朝前（點一下改北上）' : '目前：北上（點一下改朝前）';
   }
   /** deg = 要朝上的方向（行進方向，0=北）。地圖要逆時針轉 deg，也就是 leaflet-rotate 的 bearing = 360 - deg */
@@ -295,6 +330,7 @@
       lastDoneIdx = s.idx;
     }
     updateHeading(lat, lon, s, gpsHead, false);
+    fetchWind(lat, lon);
     if (follow) followTo(ll, true);
     renderNav();
     renderSup();
@@ -575,7 +611,7 @@
       if (me && follow) followTo([me.lat, me.lon], false);
       drawCompass();
     };
-    setRotBtn(); drawCompass();
+    setRotBtn(); drawCompass(); drawWind();
     $('kinds').addEventListener('change', () => { renderSup(); renderNav(); });
     $('btnAhead').onclick = fetchAhead;
     $('btnNear').onclick = fetchNear;
