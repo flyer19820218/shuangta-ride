@@ -219,6 +219,18 @@
     return { to, tail, cross, kind };
   }
 
+  /** Open-Meteo 的 WMO 天氣代碼 → {icon, name} */
+  function wxInfo(code) {
+    const t = [[0, '☀️', '晴'], [1, '🌤️', '大致晴'], [2, '⛅', '多雲'], [3, '☁️', '陰'], [45, '🌫️', '霧'], [48, '🌫️', '霧'],
+      [51, '🌦️', '毛毛雨'], [53, '🌦️', '毛毛雨'], [55, '🌦️', '毛毛雨'], [56, '🌧️', '凍雨'], [57, '🌧️', '凍雨'],
+      [61, '🌧️', '小雨'], [63, '🌧️', '中雨'], [65, '🌧️', '大雨'], [66, '🌧️', '凍雨'], [67, '🌧️', '凍雨'],
+      [71, '❄️', '雪'], [73, '❄️', '雪'], [75, '❄️', '雪'], [77, '❄️', '雪'],
+      [80, '🌦️', '陣雨'], [81, '🌧️', '陣雨'], [82, '🌧️', '強陣雨'], [85, '❄️', '雪'], [86, '❄️', '雪'],
+      [95, '⛈️', '雷雨'], [96, '⛈️', '雷雨'], [99, '⛈️', '雷雨']];
+    const m = t.find(x => x[0] === code);
+    return m ? { icon: m[1], name: m[2] } : { icon: '🌡️', name: '' };
+  }
+
   /** 方位角 → 八方位中文 */
   function compass8(deg) {
     return ['北', '東北', '東', '東南', '南', '西南', '西', '西北'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];
@@ -255,5 +267,5 @@
 
   return { hv, buildCum, ascentStats, projectOnSegment, snapToTrack, applyDetour, attachPois,
            upcoming, brandOf, parseOverpass, mergePois, samplePolyline, fmtKm, fmtDur,
-           bearing, compass8, fmtDist, rejoinTarget, stepText, destination, angleDelta, lerpAngle, windEffect };
+           bearing, compass8, fmtDist, rejoinTarget, stepText, destination, angleDelta, lerpAngle, windEffect, wxInfo };
 });

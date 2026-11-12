@@ -48,7 +48,18 @@
   // ---------- 風向（Open-Meteo 預報模型的「目前」風，不是現場實測）----------
   let wind = LS.get('sh2.wind', null);   // {dir(風從哪來), spd(m/s), t, lat, lon}
   let windBusy = false;
+  function drawWx() {
+    const el = $('wx'); if (!el) return;
+    if (!wind || wind.code == null) { el.hidden = true; return; }
+    const w = C.wxInfo(wind.code);
+    el.hidden = false;
+    el.title = w.name + (wind.pop != null ? '，未來 3 小時降雨機率 ' + wind.pop + '%' : '');
+    $('wxIcon').textContent = w.icon;
+    $('wxTxt').innerHTML = (wind.temp != null ? Math.round(wind.temp) + '°' : '') +
+      (wind.pop != null ? '<small class="' + (wind.pop >= 50 ? 'bad' : '') + '">雨 ' + wind.pop + '%</small>' : '');
+  }
   function drawWind() {
+    drawWx();
     const el = $('wind'); if (!el) return;
     if (!wind) { el.hidden = true; return; }
     el.hidden = false;
@@ -67,12 +78,15 @@
     windBusy = true;
     try {
       const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(3) + '&longitude=' + lon.toFixed(3) +
-        '&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto';
+        '&current=wind_speed_10m,wind_direction_10m,temperature_2m,weather_code&hourly=precipitation_probability&forecast_hours=3&wind_speed_unit=ms&timezone=auto';
       const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
       const r = await fetch(u, { signal: ctl.signal }); clearTimeout(to);
       const j = await r.json(), c = j && j.current;
       if (c && isFinite(c.wind_speed_10m) && isFinite(c.wind_direction_10m)) {
-        wind = { dir: c.wind_direction_10m, spd: c.wind_speed_10m, t: Date.now(), lat, lon };
+        const ph = (j.hourly && j.hourly.precipitation_probability || []).filter(x => isFinite(x));
+        wind = { dir: c.wind_direction_10m, spd: c.wind_speed_10m, t: Date.now(), lat, lon,
+                 temp: isFinite(c.temperature_2m) ? c.temperature_2m : null, code: isFinite(c.weather_code) ? c.weather_code : null,
+                 pop: ph.length ? Math.max.apply(null, ph) : null };
         LS.set('sh2.wind', wind);
       }
     } catch (e) { /* 沒訊號：沿用上次的 */ }

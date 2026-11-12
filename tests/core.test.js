@@ -175,4 +175,11 @@ ok('windEffect：順風／逆風／側風', () => {
   assert.strictEqual(C.windEffect(100, null, 3).kind, '');
 });
 
+ok('wxInfo：天氣代碼轉圖示與名稱', () => {
+  assert.deepStrictEqual(C.wxInfo(0), { icon: '☀️', name: '晴' });
+  assert.strictEqual(C.wxInfo(61).name, '小雨');
+  assert.strictEqual(C.wxInfo(95).icon, '⛈️');
+  assert.strictEqual(C.wxInfo(12345).name, '');
+});
+
 console.log('\n全部通過：' + n + ' 項');
