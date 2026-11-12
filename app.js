@@ -46,7 +46,7 @@
     b.classList.toggle('on', rotOn());
   }
   // ---------- 風向（Open-Meteo 預報模型的「目前」風，不是現場實測）----------
-  let wind = LS.get('sh2.wind', null);   // {dir(風從哪來), spd(m/s), gust, t, lat, lon}
+  let wind = LS.get('sh2.wind', null);   // {dir(風從哪來), spd(m/s), t, lat, lon}
   let windBusy = false;
   function drawWind() {
     const el = $('wind'); if (!el) return;
@@ -58,7 +58,7 @@
     $('windArrow').style.transform = 'rotate(' + (((w.to + br) % 360 + 360) % 360) + 'deg)';
     const ageMin = Math.round((Date.now() - wind.t) / 60000);
     $('windTxt').innerHTML = (w.kind ? '<b class="' + (w.kind === '逆風' ? 'bad' : w.kind === '順風' ? 'good' : '') + '">' + w.kind + '</b> ' : '') +
-      wind.spd.toFixed(1) + ' m/s' + '<small>' + C.compass8(wind.dir) + '風' + (wind.gust ? ' · 陣風 ' + wind.gust.toFixed(0) : '') + (ageMin > 30 ? ' · ' + ageMin + ' 分前' : '') + '</small>';
+      wind.spd.toFixed(1) + ' m/s' + '<small>' + C.compass8(wind.dir) + '風' + '' + (ageMin > 30 ? ' · ' + ageMin + ' 分前' : '') + '</small>';
   }
   /** 位置有變動且資料超過 15 分鐘（或移動超過 8 km）才重新抓；失敗就沿用舊的 */
   async function fetchWind(lat, lon) {
@@ -67,12 +67,12 @@
     windBusy = true;
     try {
       const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(3) + '&longitude=' + lon.toFixed(3) +
-        '&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&timezone=auto';
+        '&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto';
       const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
       const r = await fetch(u, { signal: ctl.signal }); clearTimeout(to);
       const j = await r.json(), c = j && j.current;
       if (c && isFinite(c.wind_speed_10m) && isFinite(c.wind_direction_10m)) {
-        wind = { dir: c.wind_direction_10m, spd: c.wind_speed_10m, gust: c.wind_gusts_10m, t: Date.now(), lat, lon };
+        wind = { dir: c.wind_direction_10m, spd: c.wind_speed_10m, t: Date.now(), lat, lon };
         LS.set('sh2.wind', wind);
       }
     } catch (e) { /* 沒訊號：沿用上次的 */ }
