@@ -47,12 +47,16 @@
   }
   // ---------- 風向（Open-Meteo 預報模型的「目前」風，不是現場實測）----------
   let wind = LS.get('sh2.wind', null);   // {dir(風從哪來), spd(m/s), t, lat, lon}
-  let windBusy = false;
+  let windBusy = false, wxMsg = '等定位';
   function drawWx() {
     const el = $('wx'); if (!el) return;
-    if (!wind || wind.code == null) { el.hidden = true; return; }
-    const w = C.wxInfo(wind.code);
     el.hidden = false;
+    if (!wind || wind.code == null) {          // 還沒有資料：顯示狀態，讓你知道它在（點一下可重試）
+      el.title = '點一下重新取得天氣';
+      $('wxIcon').textContent = '🌡️'; $('wxTxt').innerHTML = '<small>' + esc(wxMsg) + '</small>';
+      return;
+    }
+    const w = C.wxInfo(wind.code);
     el.title = w.name + (wind.pop != null ? '，未來 3 小時降雨機率 ' + wind.pop + '%' : '');
     $('wxIcon').textContent = w.icon;
     $('wxTxt').innerHTML = (wind.temp != null ? Math.round(wind.temp) + '°' : '') +
@@ -72,15 +76,18 @@
       wind.spd.toFixed(1) + ' m/s' + '<small>' + C.compass8(wind.dir) + '風' + '' + (ageMin > 30 ? ' · ' + ageMin + ' 分前' : '') + '</small>';
   }
   /** 位置有變動且資料超過 15 分鐘（或移動超過 8 km）才重新抓；失敗就沿用舊的 */
-  async function fetchWind(lat, lon) {
-    if (windBusy || !navigator.onLine) return;
-    if (wind && Date.now() - wind.t < 15 * 60000 && C.hv([wind.lat, wind.lon], [lat, lon]) < 8000) return;
-    windBusy = true;
+  async function fetchWind(lat, lon, force) {
+    if (windBusy) return;
+    if (!navigator.onLine) { wxMsg = '沒網路'; drawWind(); return; }
+    // 舊版存的資料沒有天氣欄位（code），視為過期，立刻重抓
+    if (!force && wind && wind.code != null && Date.now() - wind.t < 15 * 60000 && C.hv([wind.lat, wind.lon], [lat, lon]) < 8000) return;
+    windBusy = true; wxMsg = '載入中'; drawWx();
     try {
       const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(3) + '&longitude=' + lon.toFixed(3) +
         '&current=wind_speed_10m,wind_direction_10m,temperature_2m,weather_code&hourly=precipitation_probability&forecast_hours=3&wind_speed_unit=ms&timezone=auto';
       const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
       const r = await fetch(u, { signal: ctl.signal }); clearTimeout(to);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json(), c = j && j.current;
       if (c && isFinite(c.wind_speed_10m) && isFinite(c.wind_direction_10m)) {
         const ph = (j.hourly && j.hourly.precipitation_probability || []).filter(x => isFinite(x));
@@ -89,7 +96,8 @@
                  pop: ph.length ? Math.max.apply(null, ph) : null };
         LS.set('sh2.wind', wind);
       }
-    } catch (e) { /* 沒訊號：沿用上次的 */ }
+      else wxMsg = '無資料';
+    } catch (e) { wxMsg = '失敗·點我'; /* 沒訊號：沿用上次的 */ }
     windBusy = false; drawWind();
   }
 
@@ -626,6 +634,7 @@
       drawCompass();
     };
     setRotBtn(); drawCompass(); drawWind();
+    $('wx').onclick = () => { if (me) fetchWind(me.lat, me.lon, true); else wxMsg = '等定位'; drawWx(); };
     $('kinds').addEventListener('change', () => { renderSup(); renderNav(); });
     $('btnAhead').onclick = fetchAhead;
     $('btnNear').onclick = fetchNear;
